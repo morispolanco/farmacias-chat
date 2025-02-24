@@ -1,7 +1,6 @@
 import streamlit as st
 import subprocess
 import json
-import os
 
 # Título de la aplicación
 st.title("PharmaChat Pro - Asistente para Farmacias")
@@ -21,42 +20,45 @@ entrada_usuario = st.text_area("Ingresa tu consulta o situación:", height=150)
 
 # Función para generar contenido con Gémini usando curl
 def generar_respuesta(entrada):
-    # Preparar el comando curl
-    curl_cmd = f"""
-    curl -X POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY} \
-      -H 'Content-Type: application/json' \
-      -d @<(echo '{{
+    # Definir el cuerpo JSON de la solicitud
+    cuerpo_json = {
         "contents": [
-          {{
-            "role": "user",
-            "parts": [
-              {{
-                "text": "{entrada}"
-              }}
-            ]
-          }}
+            {
+                "role": "user",
+                "parts": [
+                    {"text": entrada}
+                ]
+            }
         ],
-        "generationConfig": {{
-          "temperature": 1,
-          "topK": 40,
-          "topP": 0.95,
-          "maxOutputTokens": 8192,
-          "responseMimeType": "text/plain"
-        }}
-      }}')
-    """
-    
+        "generationConfig": {
+            "temperature": 1,
+            "topK": 40,
+            "topP": 0.95,
+            "maxOutputTokens": 8192,
+            "responseMimeType": "text/plain"
+        }
+    }
+
+    # Convertir el cuerpo JSON a una cadena
+    cuerpo_str = json.dumps(cuerpo_json)
+
+    # Construir el comando curl como una lista para evitar problemas de shell
+    curl_cmd = [
+        "curl",
+        "-X", "POST",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}",
+        "-H", "Content-Type: application/json",
+        "-d", cuerpo_str
+    ]
+
     # Ejecutar el comando curl y capturar la salida
-    resultado = subprocess.run(curl_cmd, shell=True, capture_output=True, text=True)
-    
-    # Verificar si hubo error
-    if resultado.stderr:
-        return f"Error al procesar la solicitud: {resultado.stderr}"
-    
-    # Parsear la respuesta JSON
     try:
+        resultado = subprocess.run(curl_cmd, capture_output=True, text=True, check=True)
+        # Parsear la respuesta JSON
         respuesta_json = json.loads(resultado.stdout)
         return respuesta_json["candidates"][0]["content"]["parts"][0]["text"]
+    except subprocess.CalledProcessError as e:
+        return f"Error al procesar la solicitud: {e.stderr}"
     except (json.JSONDecodeError, KeyError):
         return "No se pudo obtener una respuesta válida. Intenta de nuevo."
 
